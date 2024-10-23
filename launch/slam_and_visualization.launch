@@ -1,0 +1,13 @@
+<launch>
+    <!-- Node 1: Start ORB_SLAM3 (ros_mono) -->
+    <node name="orb_slam3" pkg="wla_orb" type="ros_mono" required="true" 
+          args="/home/catkin_ws/src/wla_orb/Vocabulary/ORBvoc.txt /home/ORB_SLAM3/Examples_old/Monocular/TUM2.yaml"/>
+
+    <!-- Node 2: Start camera pose visualizer after ORB_SLAM3 -->
+    <node name="camera_pose_visualizer" pkg="wla_orb" type="camera_pose_visualizer" required="true" />
+
+    <!-- Node 3: Run rosbag play, waiting until the first two nodes have started -->
+    <node name="rosbag_play" pkg="rosbag" type="play" args="/opt/wang/tum/rgbd_dataset_freiburg2_desk.bag /camera/rgb/image_color:=/camera/image_raw" respawn="false">
+        <rosparam param="use_sim_time">true</rosparam>
+    </node>
+</launch>
