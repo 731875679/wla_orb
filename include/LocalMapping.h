@@ -104,7 +104,7 @@ public:
     bool mbNotBA1;
     bool mbNotBA2;
     bool mbBadImu;
-
+    bool finishedLoop=false;
     bool mbWriteStats;
 
     // not consider far points (clouds)

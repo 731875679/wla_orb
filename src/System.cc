@@ -244,6 +244,12 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
  
 }
 
+bool System::IsLoopDetected() {
+    if (mpLoopCloser) {
+        return mpLoopCloser->IsLoopDetected();
+    }
+    return false;
+}
 
 Sophus::SE3f System::TrackStereo(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
 {
@@ -1585,7 +1591,6 @@ void System::SaveDebugData(const int &initIdx)
     f << mpLocalMapper->mInitTime << endl;
     f.close();
 }
-
 
 int System::GetTrackingState()
 {

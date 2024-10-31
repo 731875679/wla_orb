@@ -1,3 +1,3 @@
-/home/ORB_SLAM3/Thirdparty/DBoW2/build/CMakeFiles/rebuild_cache.dir
-/home/ORB_SLAM3/Thirdparty/DBoW2/build/CMakeFiles/edit_cache.dir
-/home/ORB_SLAM3/Thirdparty/DBoW2/build/CMakeFiles/DBoW2.dir
+/home/wang/catkin_ws/src/wla_orb/Thirdparty/DBoW2/build/CMakeFiles/rebuild_cache.dir
+/home/wang/catkin_ws/src/wla_orb/Thirdparty/DBoW2/build/CMakeFiles/edit_cache.dir
+/home/wang/catkin_ws/src/wla_orb/Thirdparty/DBoW2/build/CMakeFiles/DBoW2.dir

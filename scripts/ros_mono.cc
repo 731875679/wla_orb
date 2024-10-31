@@ -168,7 +168,7 @@ int main(int argc, char** argv) {
     string currentTime = ss.str();
 
     // Save camera trajectory
-    string directoryName = "./dataset/" + currentTime;
+    string directoryName = "/home/wang/catkin_ws/src/wla_orb/dataset/" + currentTime;
 
     // Ensure parent directory exists
     if (!createDirectoryWithParents("./dataset")) {

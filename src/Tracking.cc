@@ -2247,11 +2247,16 @@ void Tracking::Track()
             // Check if we need to insert a new keyframe
             // if(bNeedKF && bOK)
             if(bNeedKF && (bOK || (mInsertKFsLost && mState==RECENTLY_LOST &&
-                                   (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD))))
-                CreateNewKeyFrame();
+                                   (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)))){
+                    CreateNewKeyFrame();
+                    newKeyFrame=true;    
+            }
+                
 
+                
 #ifdef REGISTER_TIMES
-            std::chrono::steady_clock::time_point time_EndNewKF = std::chrono::steady_clock::now();
+            std::chrono::steady_clock::time_point time_EndNewKF = std::chro
+            no::steady_clock::now();
 
             double timeNewKF = std::chrono::duration_cast<std::chrono::duration<double,std::milli> >(time_EndNewKF - time_StartNewKF).count();
             vdNewKF_ms.push_back(timeNewKF);
@@ -3334,7 +3339,6 @@ void Tracking::CreateNewKeyFrame()
 
 
     mpLocalMapper->InsertKeyFrame(pKF);
-
     mpLocalMapper->SetNotStop(false);
 
     mnLastKeyFrameId = mCurrentFrame.mnId;

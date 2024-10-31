@@ -175,7 +175,8 @@ public:
     vector<MapPoint*> GetLocalMapMPS();
 
     bool mbWriteStats;
-
+    bool newKeyFrame = false;
+    
 #ifdef REGISTER_TIMES
     void LocalMapStats2File();
     void TrackStats2File();

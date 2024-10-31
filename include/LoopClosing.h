@@ -53,7 +53,7 @@ public:
 public:
 
     LoopClosing(Atlas* pAtlas, KeyFrameDatabase* pDB, ORBVocabulary* pVoc,const bool bFixScale, const bool bActiveLC);
-
+    bool IsLoopDetected() { return mbLoopDetected; }
     void SetTracker(Tracking* pTracker);
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
@@ -73,16 +73,14 @@ public:
         unique_lock<std::mutex> lock(mMutexGBA);
         return mbRunningGBA;
     }
-    bool isFinishedGBA(){
-        unique_lock<std::mutex> lock(mMutexGBA);
-        return mbFinishedGBA;
-    }   
+    bool finishedLoop=false;
 
     void RequestFinish();
 
     bool isFinished();
 
     Viewer* mpViewer;
+    bool completeLoop=false;
 
 #ifdef REGISTER_TIMES
 

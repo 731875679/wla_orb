@@ -248,7 +248,7 @@ void LocalMapping::Run()
 #endif
 
             mpLoopCloser->InsertKeyFrame(mpCurrentKeyFrame);
-
+        
 #ifdef REGISTER_TIMES
             std::chrono::steady_clock::time_point time_EndLocalMap = std::chrono::steady_clock::now();
 
@@ -286,6 +286,7 @@ void LocalMapping::InsertKeyFrame(KeyFrame *pKF)
     unique_lock<mutex> lock(mMutexNewKFs);
     mlNewKeyFrames.push_back(pKF);
     mbAbortBA=true;
+    
 }
 
 
@@ -868,6 +869,7 @@ void LocalMapping::Release()
     mlNewKeyFrames.clear();
 
     cout << "Local Mapping RELEASE" << endl;
+    finishedLoop=true;
 }
 
 bool LocalMapping::AcceptKeyFrames()

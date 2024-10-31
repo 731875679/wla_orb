@@ -132,7 +132,7 @@ public:
     // Input images: RGB (CV_8UC3) or grayscale (CV_8U). RGB is converted to grayscale.
     // Returns the camera pose (empty if tracking fails).
     Sophus::SE3f TrackMonocular(const cv::Mat &im, const double &timestamp, const vector<IMU::Point>& vImuMeas = vector<IMU::Point>(), string filename="");
-
+    bool IsLoopDetected();
 
     // This stops local mapping thread (map building) and performs only camera tracking.
     void ActivateLocalizationMode();
@@ -183,7 +183,7 @@ public:
 
     void SaveTrajectoryEuRoC(const string &filename, Map* pMap);
     void SaveKeyFrameTrajectoryEuRoC(const string &filename, Map* pMap);
-
+    
     // Save data used for initialization debug
     void SaveDebugData(const int &iniIdx);
 
@@ -212,6 +212,12 @@ public:
 
     float GetImageScale();
 
+    // Local Mapper. It manages the local map and performs local bundle adjustment.
+    LocalMapping* mpLocalMapper;
+    // Tracker. It receives a frame and computes the associated camera pose.
+    // It also decides when to insert a new keyframe, create some new MapPoints and
+    // performs relocalization if tracking fails.
+    Tracking* mpTracker;
 #ifdef REGISTER_TIMES
     void InsertRectTime(double& time);
     void InsertResizeTime(double& time);
@@ -220,7 +226,10 @@ public:
 
 private:
 
-    
+    // Loop Closer. It searches loops with every new keyframe. If there is a loop it performs
+    // a pose graph optimization and full bundle adjustment (in a new thread) afterwards.
+    LoopClosing* mpLoopCloser;
+
     void SaveAtlas(int type);
     bool LoadAtlas(int type);
 
@@ -239,18 +248,10 @@ private:
     //Map* mpMap;
     Atlas* mpAtlas;
 
-    // Tracker. It receives a frame and computes the associated camera pose.
-    // It also decides when to insert a new keyframe, create some new MapPoints and
-    // performs relocalization if tracking fails.
-    Tracking* mpTracker;
 
-    // Local Mapper. It manages the local map and performs local bundle adjustment.
-    LocalMapping* mpLocalMapper;
 
-    // Loop Closer. It searches loops with every new keyframe. If there is a loop it performs
-    // a pose graph optimization and full bundle adjustment (in a new thread) afterwards.
-    LoopClosing* mpLoopCloser;
 
+        
     // The viewer draws the map and the current camera pose. It uses Pangolin.
     Viewer* mpViewer;
 

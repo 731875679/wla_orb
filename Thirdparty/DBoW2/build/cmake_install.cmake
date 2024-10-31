@@ -1,4 +1,4 @@
-# Install script for directory: /home/ORB_SLAM3/Thirdparty/DBoW2
+# Install script for directory: /home/wang/catkin_ws/src/wla_orb/Thirdparty/DBoW2
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/ORB_SLAM3/Thirdparty/DBoW2/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/wang/catkin_ws/src/wla_orb/Thirdparty/DBoW2/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

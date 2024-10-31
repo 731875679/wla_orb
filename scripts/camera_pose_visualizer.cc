@@ -6,7 +6,7 @@
 
 class PoseVisualizer {
 public:
-    PoseVisualizer() : logFile("/home/catkin_ws/src/wla_orb/log/pose_log.txt") {
+    PoseVisualizer() : logFile("/home/wang/catkin_ws/src/wla_orb/log/pose_log.txt") {
         if (!logFile.is_open()) {
             ROS_ERROR("Failed to open log file");
             return;
@@ -23,7 +23,7 @@ public:
 
     void run() {
         while (!viewer->wasStopped()) {
-            viewer->spinOnce(100);
+            viewer->spinOnce(500);
             ros::spinOnce();
             ros::Duration(0.1).sleep(); // Sleep for 100ms
         }
