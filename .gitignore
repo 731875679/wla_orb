@@ -1,2 +1,8 @@
 Vocabulary/
 Vocabulary/ORBvoc.txt
+build/
+dataset/
+Thirdparty/DBoW2/build
+Thirdparty/g2o/build
+Thirdparty/Sophus/build
+execute/

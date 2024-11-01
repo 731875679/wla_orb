@@ -158,5 +158,16 @@ target_link_libraries(ros_mono_direct_send
   ${PCL_LIBRARIES}
 )
 
+# add_executable(points3d_visualizer scripts/points3d_visualizer.cc)
+# target_link_libraries(points3d_visualizer
+#   ${catkin_LIBRARIES}
+#   ${OpenCV_LIBS}
+#   ${EIGEN3_LIBS}
+#   ${Pangolin_LIBRARIES}
+#   ${PROJECT_SOURCE_DIR}/lib/libORB_SLAM3.so
+#   -lboost_system
+#   ${PCL_LIBRARIES}
+# )
+
 # 生成项目
 catkin_package()
