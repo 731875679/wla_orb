@@ -21,44 +21,6 @@
 
 using namespace std;
 
-// Function to check if a file exists
-bool fileExists(const string& filename) {
-    ifstream file(filename.c_str());
-    return file.good();
-}
-
-// Function to create an empty file
-bool createFile(const string& filename) {
-    ofstream file(filename.c_str());
-    if (file.is_open()) {
-        file.close();
-        return true;
-    }
-    return false;
-}
-
-// Function to create a directory
-bool createDirectory(const string& dirname) {
-    if (mkdir(dirname.c_str(), 0777) == 0 || errno == EEXIST) {
-        return true;
-    }
-    return false;
-}
-
-// Function to create directory with error handling
-bool createDirectoryWithParents(const string& dirname) {
-    size_t pos = 0;
-    do {
-        pos = dirname.find('/', pos + 1);
-        string subdir = dirname.substr(0, pos);
-        if (mkdir(subdir.c_str(), 0777) && errno!= EEXIST) {
-            cerr << "Error: Failed to create directory " << subdir << " - " << strerror(errno) << endl;
-            return false;
-        }
-    } while (pos!= string::npos);
-    return true;
-}
-
 class ImageGrabber {
 public:
     ImageGrabber(ORB_SLAM3::System* pSLAM, ros::Publisher& pose_pub, ros::Publisher& rgb_pub, ros::Publisher& points_pub)
@@ -68,8 +30,8 @@ public:
     
     void GrabImage(const sensor_msgs::ImageConstPtr& msg);
     
-    geometry_msgs::PoseStamped CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF);
-    void storeRGBImage(const sensor_msgs::ImageConstPtr& msg);
+    geometry_msgs::PoseStamped CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF, bool finishedLoop);
+    void storeRGBImage(const sensor_msgs::ImageConstPtr& msg, int keyframe_id);
     sensor_msgs::PointCloud2 createMapPoints(ORB_SLAM3::KeyFrame* pKF);
 
 private:
@@ -77,21 +39,22 @@ private:
     ros::Publisher posePublisher;
     ros::Publisher rgbPublisher;
     ros::Publisher pointPublisher;
-    sensor_msgs::ImageConstPtr lastRGBImage;
+    sensor_msgs::ImagePtr lastRGBImage;
     int prevKeyFrameId;
 
     std::unordered_set<size_t> publishedPointIDs;  // Set to store the IDs of already published MapPoints
 };
 
 // Define the method to create PoseStamped messages
-geometry_msgs::PoseStamped ImageGrabber::CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF) {
-    Sophus::SE3f Tcw = pKF->GetPose(); 
+geometry_msgs::PoseStamped ImageGrabber::CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF, bool finishedLoop) {
+    Sophus::SE3f Tcw = pKF->GetPose();   
+    
     Eigen::Quaternionf q = Tcw.unit_quaternion(); 
     Eigen::Vector3f t = Tcw.translation(); 
 
     geometry_msgs::PoseStamped poseMsg;
     poseMsg.header.stamp = ros::Time(pKF->mTimeStamp);  
-    poseMsg.header.frame_id = std::to_string(pKF->mnId);  
+    poseMsg.header.frame_id = std::to_string(pKF->mnId) + "_" + (finishedLoop ? "1" : "0");
 
     poseMsg.pose.position.x = t(0);
     poseMsg.pose.position.y = t(1);
@@ -105,8 +68,9 @@ geometry_msgs::PoseStamped ImageGrabber::CreatePoseMessage(ORB_SLAM3::KeyFrame* 
 }
 
 // Store RGB image temporarily
-void ImageGrabber::storeRGBImage(const sensor_msgs::ImageConstPtr& msg) {
-    lastRGBImage = msg;  // Store the latest RGB image
+void ImageGrabber::storeRGBImage(const sensor_msgs::ImageConstPtr& msg, int keyframe_id) {
+    lastRGBImage = sensor_msgs::ImagePtr(new sensor_msgs::Image(*msg));  // 深拷贝图像消息
+    lastRGBImage->header.frame_id = std::to_string(keyframe_id);  // 将关键帧ID加入到frame_id
 }
 
 // Modify the createMapPoints function
@@ -169,8 +133,6 @@ sensor_msgs::PointCloud2 ImageGrabber::createMapPoints(ORB_SLAM3::KeyFrame* pKF)
 }
 
 void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg) {
-    // Temporarily store the RGB image
-    storeRGBImage(msg);
 
     // Convert the ROS image message to cv::Mat
     cv_bridge::CvImageConstPtr cv_ptr;
@@ -193,27 +155,28 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg) {
         if (finishedLoop) {
             std::vector<ORB_SLAM3::KeyFrame*> allKeyFrames = mpSLAM->GetAtlas()->GetAllKeyFrames();
             for (ORB_SLAM3::KeyFrame* pKF : allKeyFrames) {
-                if (pKF && !pKF->isBad()) {
-                    geometry_msgs::PoseStamped poseMsg = CreatePoseMessage(pKF);
-                    posePublisher.publish(poseMsg);  // Publish pose
+                if (pKF->mnId > prevKeyFrameId) {
+                    geometry_msgs::PoseStamped poseMsg = CreatePoseMessage(pKF, true);
+                    posePublisher.publish(poseMsg);
+                    prevKeyFrameId = pKF->mnId;
                 }
             }
-            mpSLAM->mpLocalMapper->finishedLoop = false;  // Reset loop closure flag
         } else {
-            // If no loop closure, only publish the latest keyframe pose and RGB image
+            // If not loop closure, only process the new keyframe
             ORB_SLAM3::KeyFrame* pKF = mpSLAM->mpTracker->GetLastKeyFrame();
-            if (pKF && !pKF->isBad()) {
-                geometry_msgs::PoseStamped poseMsg = CreatePoseMessage(pKF);
-                posePublisher.publish(poseMsg);  // Publish pose
-                rgbPublisher.publish(lastRGBImage);  // Publish RGB image with the pose
+            if (pKF && pKF->mnId != prevKeyFrameId) {
+                storeRGBImage(msg, pKF->mnId);
 
-                // Generate and publish MapPoints associated with this keyframe
-                sensor_msgs::PointCloud2 pointCloudMsg = createMapPoints(pKF);
-                pointPublisher.publish(pointCloudMsg);  // Publish the point cloud
-                
-                prevKeyFrameId = pKF->mnId;  // Update previous keyframe ID
+                geometry_msgs::PoseStamped poseMsg = CreatePoseMessage(pKF, false);
+                posePublisher.publish(poseMsg);
+
+                rgbPublisher.publish(lastRGBImage);
+
+                sensor_msgs::PointCloud2 mapPointsMsg = createMapPoints(pKF);
+                pointPublisher.publish(mapPointsMsg);
+
+                prevKeyFrameId = pKF->mnId;
             }
-            mpSLAM->mpTracker->newKeyFrame=false;
         }
     }
 }

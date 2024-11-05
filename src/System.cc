@@ -693,8 +693,7 @@ void System::SaveKeyPointsAndMapPoints(const std::string &filename) {
         std::vector<cv::KeyPoint> keypoints = pKF->mvKeysUn;
         set<MapPoint*> mappoints = pKF->GetMapPoints();
 
-        Sophus::SE3f Twc = pKF->GetPoseInverse();
-        Sophus::SE3f Tcw = Twc.inverse();
+        Sophus::SE3f Tcw = pKF->GetPose();
 
         Eigen::Quaternionf q = Tcw.unit_quaternion();
         Eigen::Vector3f t = Tcw.translation();
