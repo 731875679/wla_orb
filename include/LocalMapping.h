@@ -26,7 +26,15 @@
 #include "Tracking.h"
 #include "KeyFrameDatabase.h"
 #include "Settings.h"
-
+#include <opencv2/core.hpp>      // 用于基础数据结构 (如 cv::Mat)
+#include <geometry_msgs/PoseStamped.h>  // 用于发布相机位姿
+#include <sensor_msgs/PointCloud2.h>
+#include <pcl_ros/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+#include <ros/ros.h>
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/core/core.hpp>
 #include <mutex>
 
 
@@ -41,6 +49,7 @@ class Atlas;
 class LocalMapping
 {
 public:
+    bool insertKeyframe=false;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     LocalMapping(System* pSys, Atlas* pAtlas, const float bMonocular, bool bInertial, const string &_strSeqName=std::string());
 
@@ -70,6 +79,7 @@ public:
 
     void RequestFinish();
     bool isFinished();
+    LoopClosing* mpLoopCloser;
 
     int KeyframesInQueue(){
         unique_lock<std::mutex> lock(mMutexNewKFs);
@@ -79,6 +89,8 @@ public:
     bool IsInitializing();
     double GetCurrKFTime();
     KeyFrame* GetCurrKF();
+
+    std::unordered_map<int, std::tuple<sensor_msgs::Image, geometry_msgs::PoseStamped, sensor_msgs::PointCloud2>> mKeyFrameData;//wanglian
 
     std::mutex mMutexImuInit;
 
@@ -104,7 +116,9 @@ public:
     bool mbNotBA1;
     bool mbNotBA2;
     bool mbBadImu;
-    bool finishedLoop=false;
+
+    bool finishedLocalBA=false;//wanglian
+
     bool mbWriteStats;
 
     // not consider far points (clouds)
@@ -158,7 +172,6 @@ protected:
 
     Atlas* mpAtlas;
 
-    LoopClosing* mpLoopCloser;
     Tracking* mpTracker;
 
     std::list<KeyFrame*> mlNewKeyFrames;

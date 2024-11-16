@@ -137,6 +137,8 @@ public:
     // Current Frame
     Frame mCurrentFrame;
     Frame mLastFrame;
+    
+    std::unordered_map<int, cv::Mat> mnIdToRGBMap;//wanglian mnid->rgb
 
     cv::Mat mImGray;
 

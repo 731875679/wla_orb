@@ -409,7 +409,7 @@ Sophus::SE3f System::TrackRGBD(const cv::Mat &im, const cv::Mat &depthmap, const
 Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, const vector<IMU::Point>& vImuMeas, string filename)
 {
     // add the images
-    mImages.push_back(im.clone());//wanglian
+    // mImages.push_back(im.clone());//wanglian
     {
         unique_lock<mutex> lock(mMutexReset);
         if(mbShutDown)
@@ -421,7 +421,7 @@ Sophus::SE3f System::TrackMonocular(const cv::Mat &im, const double &timestamp, 
         cerr << "ERROR: you called TrackMonocular but input sensor was not set to Monocular nor Monocular-Inertial." << endl;
         exit(-1);
     }
-
+    
     cv::Mat imToFeed = im.clone();
     if(settings_ && settings_->needToResize()){
         cv::Mat resizedIm;
@@ -698,7 +698,7 @@ void System::SaveKeyPointsAndMapPoints(const std::string &filename) {
         Eigen::Quaternionf q = Tcw.unit_quaternion();
         Eigen::Vector3f t = Tcw.translation();
 
-        f << pKF->mnFrameId << " " << std::setprecision(20) << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << " " << t(0) << " " << t(1) << " " << t(2)<< " " << 1;
+        f << pKF->mnId << " " << std::setprecision(20) << q.w() << " " << q.x() << " " << q.y() << " " << q.z() << " " << t(0) << " " << t(1) << " " << t(2)<< " " << 1;
 
         std::ostringstream oss_time;
         oss_time << std::fixed << std::setprecision(6) << pKF->mTimeStamp; // Adjust precision as needed
@@ -728,7 +728,7 @@ void System::SaveKeyPointsAndMapPoints(const std::string &filename) {
                 }
 
                 // 将当前图像 id 和特征点 id 组合加入映射关系中
-                point3d_to_2d_map[key].push_back(std::make_pair(pKF->mnFrameId, feature_id));
+                point3d_to_2d_map[key].push_back(std::make_pair(pKF->mnId, feature_id));
 
                 // 递增特征点 id
                 feature_id++;
@@ -786,12 +786,24 @@ void System::SavePointcloud(const string &filename) {
                     // Get the frame index and feature point index
                     int frameIndex = pair.first;
                     int featureIndex = pair.second;
-
                     // Get the corresponding keyframe
                     KeyFrame* pObsKF = vpMapPoints[frameIndex]->GetReferenceKeyFrame();
                     if (pObsKF) {
-                        // Get the image at the frame index
-                        cv::Mat img = mImages[frameIndex];
+                        // 你获取到的 sensor_msgs::Image 类型数据
+                        sensor_msgs::Image imgMsg = std::get<0>(mpLocalMapper->mKeyFrameData[frameIndex]);
+
+                        // 使用 cv_bridge 将 ROS 图像消息转换为 OpenCV 图像
+                        cv_bridge::CvImageConstPtr cv_ptr;
+                        try {
+                            cv_ptr = cv_bridge::toCvCopy(imgMsg, sensor_msgs::image_encodings::BGR8);
+                        } catch (cv_bridge::Exception& e) {
+                            ROS_ERROR("cv_bridge exception: %s", e.what());
+                            return;
+                        }
+
+                        // 获取转换后的 cv::Mat
+                        cv::Mat img = cv_ptr->image;
+
                         // Get the 2D point coordinates
                         cv::Point2f pt = pObsKF->mvKeysUn[featureIndex].pt;
                         // Ensure the feature point is within the image boundaries

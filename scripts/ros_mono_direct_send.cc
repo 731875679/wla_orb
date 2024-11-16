@@ -16,7 +16,8 @@
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <opencv2/core/core.hpp>
-
+#include <thread>  // To create separate threads
+#include <atomic>  // To use atomic flags for safe thread synchronization
 #include "../include/System.h"
 
 using namespace std;
@@ -26,27 +27,32 @@ public:
     ImageGrabber(ORB_SLAM3::System* pSLAM, ros::Publisher& pose_pub, ros::Publisher& rgb_pub, ros::Publisher& points_pub)
         : mpSLAM(pSLAM), posePublisher(pose_pub), rgbPublisher(rgb_pub), pointPublisher(points_pub) {
         prevKeyFrameId = -1;
+        finishedGlobalBA = false;
+        insertKeyframe = false;
     }
     
     void GrabImage(const sensor_msgs::ImageConstPtr& msg);
     
-    geometry_msgs::PoseStamped CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF, bool finishedLoop);
-    void storeRGBImage(const sensor_msgs::ImageConstPtr& msg, int keyframe_id);
-    sensor_msgs::PointCloud2 createMapPoints(ORB_SLAM3::KeyFrame* pKF);
+    void ProcessKeyFrame(int frameId, const std::tuple<sensor_msgs::Image, geometry_msgs::PoseStamped, sensor_msgs::PointCloud2>& data);
+    // Background thread function to check the flags and publish messages
+    void BackgroundThread();
+    geometry_msgs::PoseStamped CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF);
+    std::thread backgroundThread;  // Thread to run the background check
 
 private:
     ORB_SLAM3::System* mpSLAM;
     ros::Publisher posePublisher;
     ros::Publisher rgbPublisher;
     ros::Publisher pointPublisher;
-    sensor_msgs::ImagePtr lastRGBImage;
+    sensor_msgs::ImagePtr CurRGBImage;
     int prevKeyFrameId;
+    bool finishedGlobalBA;
+    bool insertKeyframe;
 
-    std::unordered_set<size_t> publishedPointIDs;  // Set to store the IDs of already published MapPoints
+    std::mutex mtx;  // Mutex for synchronizing access to flags
 };
 
-// Define the method to create PoseStamped messages
-geometry_msgs::PoseStamped ImageGrabber::CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF, bool finishedLoop) {
+geometry_msgs::PoseStamped ImageGrabber::CreatePoseMessage(ORB_SLAM3::KeyFrame* pKF) {
     Sophus::SE3f Tcw = pKF->GetPose();   
     
     Eigen::Quaternionf q = Tcw.unit_quaternion(); 
@@ -54,7 +60,7 @@ geometry_msgs::PoseStamped ImageGrabber::CreatePoseMessage(ORB_SLAM3::KeyFrame* 
 
     geometry_msgs::PoseStamped poseMsg;
     poseMsg.header.stamp = ros::Time(pKF->mTimeStamp);  
-    poseMsg.header.frame_id = std::to_string(pKF->mnId) + "_" + (finishedLoop ? "1" : "0");
+    poseMsg.header.frame_id = std::to_string(pKF->mnId) + "_" +  "1";
 
     poseMsg.pose.position.x = t(0);
     poseMsg.pose.position.y = t(1);
@@ -67,69 +73,55 @@ geometry_msgs::PoseStamped ImageGrabber::CreatePoseMessage(ORB_SLAM3::KeyFrame* 
     return poseMsg;
 }
 
-// Store RGB image temporarily
-void ImageGrabber::storeRGBImage(const sensor_msgs::ImageConstPtr& msg, int keyframe_id) {
-    lastRGBImage = sensor_msgs::ImagePtr(new sensor_msgs::Image(*msg));  // 深拷贝图像消息
-    lastRGBImage->header.frame_id = std::to_string(keyframe_id);  // 将关键帧ID加入到frame_id
+// Define the method to create PoseStamped messages
+void ImageGrabber::ProcessKeyFrame(int frameId, const std::tuple<sensor_msgs::Image, geometry_msgs::PoseStamped, sensor_msgs::PointCloud2>& data) {
+    // 从 mKeyFrameData 中解包数据
+    const sensor_msgs::Image& image = std::get<0>(data);              // RGB 图像
+    const geometry_msgs::PoseStamped& poseMsg = std::get<1>(data);    // 位姿消息
+    const sensor_msgs::PointCloud2& cloudMsg = std::get<2>(data);     // 三维点云
+    // 发布 RGB 图像
+    rgbPublisher.publish(image);
+    // 发布位姿
+    posePublisher.publish(poseMsg);
+    // 发布三维点云
+    pointPublisher.publish(cloudMsg);
+
 }
 
-// Modify the createMapPoints function
-sensor_msgs::PointCloud2 ImageGrabber::createMapPoints(ORB_SLAM3::KeyFrame* pKF) {
-    const std::vector<ORB_SLAM3::MapPoint*>& vpMapPoints = pKF->GetMapPointMatches();
+// Background thread to check if new keyframes are available and process them
+void ImageGrabber::BackgroundThread() {
+    ros::Rate rate(25);  // 每秒检查25次
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>());
-    cloud->header.frame_id = std::to_string(pKF->mnId);
-    cloud->header.stamp = pcl_conversions::toPCL(ros::Time::now());
+    // 使用 unordered_set 记录已经发布的关键帧
+    std::unordered_set<int> publishedFrames;
 
-    cv_bridge::CvImageConstPtr cv_ptr;
-    try {
-        cv_ptr = cv_bridge::toCvShare(lastRGBImage, sensor_msgs::image_encodings::BGR8);
-    } catch (cv_bridge::Exception& e) {
-        ROS_ERROR("cv_bridge exception: %s", e.what());
-        return sensor_msgs::PointCloud2();
-    }
-
-    cv::Mat image = cv_ptr->image;
-
-    for (size_t i = 0; i < vpMapPoints.size(); i++) {
-        ORB_SLAM3::MapPoint* pMP = vpMapPoints[i];
-        if (pMP && !pMP->isBad()) {
-            size_t pointID = pMP->mnId;
-
-            // Check if this MapPoint has already been published
-            if (publishedPointIDs.find(pointID) == publishedPointIDs.end()) {
-                // Get the 3D coordinates of the point
-                Eigen::Vector3f pos = pMP->GetWorldPos();
-                pcl::PointXYZRGB point;
-                point.x = pos.x();
-                point.y = pos.y();
-                point.z = pos.z();
-
-                // Get RGB from the current image
-                int u = pKF->mvKeysUn[i].pt.x;
-                int v = pKF->mvKeysUn[i].pt.y;
-
-                if (u >= 0 && u < image.cols && v >= 0 && v < image.rows) {
-                    cv::Vec3b rgb = image.at<cv::Vec3b>(v, u);
-                    point.r = rgb[2];
-                    point.g = rgb[1];
-                    point.b = rgb[0];
+    while (ros::ok()) {
+        std::lock_guard<std::mutex> lock(mtx);
+        bool isLoopClosure = mpSLAM->mpLoopCloser->finishedGlobalBA;
+        if (!isLoopClosure) {
+            // 遍历 mKeyFrameData，处理尚未发布的关键帧
+            for (const auto& [frameId, data] : mpSLAM->mpLocalMapper->mKeyFrameData) {
+                // 检查是否已经发布过该关键帧
+                if (publishedFrames.find(frameId) == publishedFrames.end()) {
+                    // 未发布的关键帧，处理并标记为已发布
+                    ProcessKeyFrame(frameId, data);
+                    publishedFrames.insert(frameId);  // 将该帧标记为已发布
                 }
-                
-                cloud->points.push_back(point);
-                publishedPointIDs.insert(pointID);
             }
         }
+        else{
+            // 遍历所有关键帧并发布它们的位姿
+            std::vector<ORB_SLAM3::KeyFrame*> allKeyFrames = mpSLAM->GetAtlas()->GetAllKeyFrames();
+            sort(allKeyFrames.begin(),allKeyFrames.end(),ORB_SLAM3::KeyFrame::lId);
+
+            for (ORB_SLAM3::KeyFrame* pKF : allKeyFrames) {
+                geometry_msgs::PoseStamped poseMsg = CreatePoseMessage(pKF);
+                posePublisher.publish(poseMsg);
+            }
+            mpSLAM->mpLoopCloser->finishedGlobalBA = false;
+        }
+        rate.sleep();
     }
-
-    cloud->width = cloud->points.size();
-    cloud->height = 1;
-    cloud->is_dense = false;
-
-    sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg(*cloud, output);
-
-    return output;
 }
 
 void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg) {
@@ -146,39 +138,6 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg) {
     // Track the image using the SLAM system
     mpSLAM->TrackMonocular(cv_ptr->image, cv_ptr->header.stamp.toSec());
 
-    // Check if loop closing is complete or new keyframe is available
-    bool finishedLoop = mpSLAM->mpLocalMapper->finishedLoop;
-    bool haveNewKeyframe = mpSLAM->mpTracker->newKeyFrame;
-
-    if (finishedLoop || haveNewKeyframe) {
-        // If loop closure is complete, gather all keyframe poses
-        if (finishedLoop) {
-            std::vector<ORB_SLAM3::KeyFrame*> allKeyFrames = mpSLAM->GetAtlas()->GetAllKeyFrames();
-            for (ORB_SLAM3::KeyFrame* pKF : allKeyFrames) {
-                if (pKF->mnId > prevKeyFrameId) {
-                    geometry_msgs::PoseStamped poseMsg = CreatePoseMessage(pKF, true);
-                    posePublisher.publish(poseMsg);
-                    prevKeyFrameId = pKF->mnId;
-                }
-            }
-        } else {
-            // If not loop closure, only process the new keyframe
-            ORB_SLAM3::KeyFrame* pKF = mpSLAM->mpTracker->GetLastKeyFrame();
-            if (pKF && pKF->mnId != prevKeyFrameId) {
-                storeRGBImage(msg, pKF->mnId);
-
-                geometry_msgs::PoseStamped poseMsg = CreatePoseMessage(pKF, false);
-                posePublisher.publish(poseMsg);
-
-                rgbPublisher.publish(lastRGBImage);
-
-                sensor_msgs::PointCloud2 mapPointsMsg = createMapPoints(pKF);
-                pointPublisher.publish(mapPointsMsg);
-
-                prevKeyFrameId = pKF->mnId;
-            }
-        }
-    }
 }
 
 int main(int argc, char** argv) {
@@ -205,12 +164,17 @@ int main(int argc, char** argv) {
 
     // Create ImageGrabber and subscribe to image topic
     ImageGrabber igb(&SLAM, pose_pub, image_pub, point3d_pub);
+    igb.backgroundThread = std::thread(&ImageGrabber::BackgroundThread, &igb);
+
     ros::Subscriber sub = nodeHandler.subscribe("/camera/image_raw", 100, &ImageGrabber::GrabImage, &igb);
 
     ros::spin();
 
     // Stop all threads
     SLAM.Shutdown();
+
+    // Wait for background thread to finish
+    igb.backgroundThread.join();
 
     ros::shutdown();
 

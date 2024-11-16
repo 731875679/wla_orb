@@ -166,7 +166,7 @@ public:
     void SaveKeyFrameTrajectoryTUM(const string &filename);
     
     // Define Point3dIDMap type for convenience
-    std::vector<cv::Mat> mImages; //wanglian
+    // std::vector<cv::Mat> mImages; //wanglian
     std::map<std::string, int> Point3d_IDMap;// wanglian 
     std::map<std::string, int> img_Point2d_IDMap;// wanglian 
     // 保存三维点到二维点的映射关系
@@ -218,6 +218,7 @@ public:
     // It also decides when to insert a new keyframe, create some new MapPoints and
     // performs relocalization if tracking fails.
     Tracking* mpTracker;
+    LoopClosing* mpLoopCloser;
 #ifdef REGISTER_TIMES
     void InsertRectTime(double& time);
     void InsertResizeTime(double& time);
@@ -228,7 +229,7 @@ private:
 
     // Loop Closer. It searches loops with every new keyframe. If there is a loop it performs
     // a pose graph optimization and full bundle adjustment (in a new thread) afterwards.
-    LoopClosing* mpLoopCloser;
+
 
     void SaveAtlas(int type);
     bool LoadAtlas(int type);

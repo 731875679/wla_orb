@@ -1567,6 +1567,8 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
 {   
     
     mImGray = im;
+    cv::Mat originalRGB = im.clone();
+
     if(mImGray.channels()==3)
     {
         if(mbRGB)
@@ -1604,6 +1606,8 @@ Sophus::SE3f Tracking::GrabImageMonocular(const cv::Mat &im, const double &times
 
     mCurrentFrame.mNameFile = filename;
     mCurrentFrame.mnDataset = mnNumDataset;
+
+    mnIdToRGBMap[mCurrentFrame.mnId] = originalRGB;//wanglian construct hashmap: mnid to originalRGB
 
 #ifdef REGISTER_TIMES
     vdORBExtract_ms.push_back(mCurrentFrame.mTimeORB_Ext);
@@ -2249,7 +2253,6 @@ void Tracking::Track()
             if(bNeedKF && (bOK || (mInsertKFsLost && mState==RECENTLY_LOST &&
                                    (mSensor == System::IMU_MONOCULAR || mSensor == System::IMU_STEREO || mSensor == System::IMU_RGBD)))){
                     CreateNewKeyFrame();
-                    newKeyFrame=true;    
             }
                 
 

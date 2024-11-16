@@ -2504,9 +2504,10 @@ void LoopClosing::RunGlobalBundleAdjustment(Map* pActiveMap, unsigned long nLoop
 #endif
             Verbose::PrintMess("Map updated!", Verbose::VERBOSITY_NORMAL);
         }
-
         mbFinishedGBA = true;
         mbRunningGBA = false;
+
+        finishedGlobalBA = true;//wanglian
     }
 }
 

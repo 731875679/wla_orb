@@ -73,7 +73,7 @@ public:
         unique_lock<std::mutex> lock(mMutexGBA);
         return mbRunningGBA;
     }
-    bool finishedLoop=false;
+    bool finishedGlobalBA=false;//wanglian
 
     void RequestFinish();
 
@@ -213,6 +213,8 @@ protected:
     // Variables related to Global Bundle Adjustment
     bool mbRunningGBA;
     bool mbFinishedGBA;
+
+
     bool mbStopGBA;
     std::mutex mMutexGBA;
     std::thread* mpThreadGBA;
